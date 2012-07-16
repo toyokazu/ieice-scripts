@@ -452,7 +452,7 @@ def line_output_je(_file, _paper_j, _authorprofs_j, _paper_e, _authorprofs_e, _r
                          ], TSV)
 end
 
-subsys = SubmissionSystemDataParser.new("toshiba-2010-utf8.txt")
+subsys = SubmissionSystemDataParser.new("toukou-2010-utf8.txt")
 subsys.parse!
 
 searchsys_j = PaperSearchSystemDataParser.new("ja" => "output_j.txt")
