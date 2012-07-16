@@ -103,12 +103,12 @@ class SubmissionSystemDataParser < DataParser
     # profiles appended after the author's name
     def authorprof_j
       # （member_number）＠affiliation
-      "（#{membernum}）＠#{orgname_j}"
+      "#{membernum.empty? ? "" : "（#{membernum}）"}＠#{orgname_j}"
     end
 
     def authorprof_e
       # （member_number）＠affiliation
-      "（#{membernum}）＠#{orgname_e}"
+      "#{membernum.empty? ? "" : "（#{membernum}）"}＠#{orgname_e}"
     end
   end
 
