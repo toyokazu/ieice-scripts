@@ -1,0 +1,5 @@
+submission: submission-utf8.tsv
+search:
+  ja: search-ja-utf8.tsv
+  en: search-en-utf8.tsv
+output: output-utf8.tsv

@@ -1,5 +1,31 @@
 #!/usr/bin/env ruby
 # -*- coding: utf-8 -*-
+require 'yaml'
+require 'tempfile'
+
+ROOT_PATH = File.expand_path('../../',  __FILE__)
+config_path = ARGV[0] || "#{ROOT_PATH}/config/files.yml"
+
+if !File.exists?(config_path)
+  puts "can not find configuration file: #{config_path}"
+  exit 1
+end
+
+config = YAML.load_file(config_path)
+
+# configuration file format example
+#
+# ---
+# submission: submission.txt
+# search:
+#   ja: search_j.txt
+#   en: search_je.txt
+# output: final_output.txt
+# ---
+#
+# submission.txt: input file name of paper submission system data (tsv)
+# search_j.txt: input file name of paper search system data (japanese, tsv)
+# search_e.txt: input file name of paper search system data (english, tsv)
 
 class ArrayHash < Hash
   def []=(key, value)
@@ -19,11 +45,19 @@ class ArrayHash < Hash
 end
 
 class DataParser
-  def volume_no(volume, num)
+  class Record
+    # define the line format specification of the input tsv file
+  end
+
+  def parse!
+    # define how to parse the input file
+  end
+
+  def self.volume_no(volume, num)
     "#{volume.downcase}_#{num}_"
   end
 
-  def volume_author(volume, authors)
+  def self.volume_author(volume, authors)
     "#{volume}；#{authors.join("；")}"
   end
 end
@@ -31,7 +65,7 @@ end
 class SubmissionSystemDataParser < DataParser
   class Record
     def initialize(line)
-      @columns = line.split("\t")
+      @columns = line.gsub("\r\n", "").split("\t")
     end
 
     # 0: id1　　　　受付番号の西暦部分
@@ -115,7 +149,7 @@ class SubmissionSystemDataParser < DataParser
   attr_reader :title_j_hash, :volume_j_hash, :title_e_hash, :volume_e_hash
   attr_reader :empty_authors_j_count, :empty_authors_e_count
   def initialize(filename)
-    @target_file = filename
+    @target_file = "#{ROOT_PATH}/files/#{filename}"
 
     # public attributes
     @records = ArrayHash.new
@@ -164,9 +198,9 @@ class SubmissionSystemDataParser < DataParser
   def save_previous_paper
     if has_previous_parsed_entry?
       @title_j_hash[@title_j] = paper
-      @volume_j_hash[volume_author(@volume_no, @authors_j)] = paper
+      @volume_j_hash[self.class.volume_author(@volume_no, @authors_j)] = paper
       @title_e_hash[@title_e] = paper
-      @volume_e_hash[volume_author(@volume_no, @authors_e)] = paper
+      @volume_e_hash[self.class.volume_author(@volume_no, @authors_e)] = paper
       @authors_j = []
       @authors_e = []
       @authorprofs_j = []
@@ -209,7 +243,7 @@ class SubmissionSystemDataParser < DataParser
         @title_j = @record.title_j
         @title_e = @record.title_e
         @record.volume1 =~ /Vol.(\w+\d+\-\w+),No.(\d+),/
-        @volume_no = volume_no($1, $2)
+        @volume_no = self.class.volume_no($1, $2)
         add_author
       else
         add_author
@@ -225,29 +259,39 @@ class PaperSearchSystemDataParser < DataParser
     attr_reader :authors
 
     def initialize(line)
-      @columns = line.split("\t")
+      @columns = line.gsub("\r\n", "").split("\t")
       @authors = @columns[7].gsub("　", " ").split("＠")
     end
 
-    # 0: 文献ID
-    # 1: 巻 (年, ソサイエティ)
-    # 2: 号
-    # 3: 開始ページ番号
-    # 4: 終了ページ番号
-    # 5: 発行年月
-    # 6: タイトル
-    # 7: 著者
-    # 8: 概要
-    # 9: キーワード（全角カンマ区切り）
-    # 10: セクション名（Regular Section／小特集号セクション名）
-    # 11: 論文種別 (論文, レター)
-    # 12: 分野ID(?)
-    # 13: 分野名(?)
-    # 14: タイトル
-    # 15: 著者名
-    # 16: 概要
-    # 17: キーワード（全角カンマ区切り）
-    # 18: ...
+    # 0: id, 文献ID
+    # 1: vol, 巻 (年, ソサイエティ) Vol
+    # 2: num, 号 Num
+    # 3: s_page, 開始ページ番号
+    # 4: e_page, 終了ページ番号
+    # 5: date, 発行年月
+    # 6: title, タイトル【検索用】
+    # 7: author, 著者【検索用】
+    # 8: abstract, 概要【検索用】
+    # 9: keyword, キーワード（全角カンマ区切り）【検索用】
+    # 10: special, 特集号名
+    # 11: category1, 論文種別 (論文, レター)
+    # 12: category2, 専門分野分類コード（大項目）
+    # 13: category3, 専門分野分類名（大項目）※目次の見出しに利用
+    # 14: disp_title, タイトル【表示用】
+    # 15: disp_author, 著者名【表示用】
+    # 16: disp_abstract, 概要【表示用】
+    # 17: disp_keyword, キーワード（全角カンマ区切り）【表示用】
+    # 18: err_fname, 正誤Web PDF
+    # 19: err_comm, 正誤内容
+    # 20: nodisp_comm, 非表示
+    # 21: delflg, 削除
+    # 22: mmflg, MM情報
+    # 23: l_auth_pdf, レター著者PDF
+    # 24: l_auth_link, レター著者内容
+    # 25: err_1, 訂正元ファイル名
+    # 26: err_2, 訂正先ファイル名
+    # 27: recommend, 推薦論文
+    # 28: 目次脚注正誤PDF
 
     def id
       @columns[0]
@@ -273,28 +317,92 @@ class PaperSearchSystemDataParser < DataParser
       @columns[5]
     end
 
-    def disp_title
-      @columns[14]
+    def title
+      @columns[6]
     end
-    
-    def disp_author
+
+    def author
       @columns[7]
     end
 
-    def disp_abstract
-      @columns[16]
+    def abstract
+      @columns[8]
     end
 
     def keyword
-      @columns[17]
+      @columns[9]
+    end
+
+    def special
+      @columns[10]
     end
 
     def category1
       @columns[11]
     end
 
+    def category2
+      @columns[12]
+    end
+
     def category3
       @columns[13]
+    end
+
+    def disp_title
+      @columns[14]
+    end
+    
+    def disp_author
+      @columns[15]
+    end
+
+    def disp_abstract
+      @columns[16]
+    end
+
+    def disp_keyword
+      @columns[17]
+    end
+
+    def err_fname
+      @columns[18]
+    end
+    
+    def err_comm
+      @columns[19]
+    end
+
+    def nodisp_comm
+      @columns[20]
+    end
+
+    def delflg
+      @columns[21]
+    end
+
+    def mmflg
+      @columns[22]
+    end
+
+    def l_auth_pdf
+      @columns[23]
+    end
+
+    def l_auth_link
+      @columns[24]
+    end
+
+    def err_1
+      @columns[25]
+    end
+    
+    def err_2
+      @columns[26]
+    end
+
+    def recommend
+      @columns[27]
     end
   end
 
@@ -323,7 +431,7 @@ class PaperSearchSystemDataParser < DataParser
       return false
     end
     @target_files.each do |lang, filename|
-      open(filename) do |f|
+      open("#{ROOT_PATH}/files/#{filename}") do |f|
         # skip two lines (maybe changed)
         f.readline
         f.readline
@@ -333,7 +441,7 @@ class PaperSearchSystemDataParser < DataParser
     @target_files.keys.each do |lang|
       @lines[lang].each do |line|
         @record = Record.new(line)
-        volume_number = volume_no(@record.vol, @record.num)
+        volume_number = self.class.volume_no(@record.vol, @record.num)
         authors = @record.disp_author.gsub("　", " ").split("＠")
         paper = {
           :title => @record.disp_title,
@@ -343,7 +451,7 @@ class PaperSearchSystemDataParser < DataParser
         }
         @records[lang][@record.id] = paper
         @title_hash[lang][@record.disp_title] = paper
-        @volume_hash[lang][volume_author(volume_number, authors)] = paper
+        @volume_hash[lang][self.class.volume_author(volume_number, authors)] = paper
       end
     end
     return true
@@ -365,6 +473,7 @@ end
 CSV = ","
 TSV = "\t"
 
+# 出力データ区切り
 def line_format(data, delimiter)
   case delimiter
   when CSV
@@ -374,22 +483,42 @@ def line_format(data, delimiter)
   end
 end
 
-def data_format(lang, _record, _author, _affiliations)
-  [lang,
+# 出力データ・フォーマット
+def data_format(_lang, _record, _author, _affiliations)
+  [_lang,
    _record.id,
    _record.vol,
    _record.num,
    _record.s_page,
    _record.e_page,
    _record.date,
+   _record.title,
+   _record.author,
+   _record.abstract,
+   _record.keyword,
+   _record.special,
+   _record.category1,
+   _record.category2,
+   _record.category3,
    _record.disp_title,
    merge_authors_and_affiliations(_author, _affiliations),
    _record.disp_abstract,
-   _record.keyword,
-   _record.category1,
-   _record.category3]
+   _record.disp_keyword,
+   _record.disp_abstract,
+   _record.disp_keyword,
+   _record.err_fname,
+   _record.err_comm,
+   _record.nodisp_comm,
+   _record.delflg,
+   _record.mmflg,
+   _record.l_auth_pdf,
+   _record.l_auth_link,
+   _record.err_1,
+   _record.err_2,
+   _record.recommend]
 end
 
+# 備考欄フォーマット
 def note_format(_paper)
   [
    _paper[:record].id1,
@@ -419,182 +548,265 @@ NOT_MATCHED = "NOT_MATCHED"
 
 def notes(result, note)
   [result, note, "\r\n"]
-  #   case result
-  #   when FULL_MATCH
-  #       return ["FULL_MATCH", note, "\r\n"]
-  #   when EN_FULL_MATCH
-  #       return ["EN_FULL_MATCH", note, "\r\n"]
-  #   when VOL_AUTHOR_MATCH
-  #       return ["VOL_AUTHOR_MATCH", note, "\r\n"]
-  #   when EN_VOL_AUTHOR_MATCH
-  #       return ["EN_VOL_AUTHOR_MATCH", note, "\r\n"]
-  #   when MULTI_VOL_AUTHOR_MATCH
-  #       return ["MULTI_VOL_AUTHOR_MATCH", note, "\r\n"]
-  #   when NOT_MATCHED
-  #       return ["NOT_MATCHED", note, "\r\n"]
-  #   end
 end
 
-def line_output_j(_file, _paper_j, _authorprofs_j, _results, _note)
-  # 日本語だけ（英語なし）の場合
+def line_output(_file, _lang, _paper, _authorprofs, _result, _note)
+  # 単一言語 (日本語 or 英語) の場合
   _file.puts line_format(["1",
-                          *data_format("ja", _paper_j[:record], _paper_j[:authors], _authorprofs_j),
-                          notes(_results, _note)
+                          *data_format(_lang, _paper[:record], _paper[:authors], _authorprofs),
+                          notes(_result, _note)
                          ], TSV)
 end
 
-def line_output_je(_file, _paper_j, _authorprofs_j, _paper_e, _authorprofs_e, _results, _note)
-  # 日本語＋英語の場合
+def line_outputs(_file, _lang1, _paper1, _authorprofs1, _lang2, _paper2, _authorprofs2, _result, _note)
+  # 複数言語 (日本語＋英語) の場合
   _file.puts line_format(["2",
-                          *data_format("ja", _paper_j[:record], _paper_j[:authors], _authorprofs_j),
-                          *data_format("en", _paper_e[:record], _paper_e[:authors], _authorprofs_e),
-                         notes(_results, _note)
+                          *data_format(_lang1, _paper1[:record], _paper1[:authors], _authorprofs1),
+                          *data_format(_lang2, _paper2[:record], _paper2[:authors], _authorprofs2),
+                         notes(_result, _note)
                          ], TSV)
 end
 
-subsys = SubmissionSystemDataParser.new("toukou-2010-utf8.txt")
-subsys.parse!
+# main routine
 
-searchsys_j = PaperSearchSystemDataParser.new("ja" => "output_j.txt")
-searchsys_j.parse!
-
-#searchsys_j_e = PaperSearchSystemDataParser.new("ja" => "output_j.txt", "en" => "output_j_e.txt")
+# example usage of Parser classes
+#
+#subsys = SubmissionSystemDataParser.new("toukou-2010-utf8.txt")
+#subsys.parse!
+#
+#searchsys_j = PaperSearchSystemDataParser.new("ja" => "output_j.txt")
+#searchsys_j.parse!
+#
+#searchsys_j_e = PaperSearchSystemDataParser.new("ja" => "output_j.txt", "en" => "output_je.txt")
 #searchsys_j_e.parse!
-
+#
 #searchsys_e =  PaperSearchSystemDataParser.new("en" => "output_e.txt")
 #searchsys_e.parse!
 
-src_volume_j = subsys.volume_j_hash
-src_volume_e = subsys.volume_e_hash
-dst_records_j = searchsys_j.records
-dst_volume_j = searchsys_j.volume_hash
-#dst_hash_e = searchsys_e.volume_hash["en"]
+subsys = SubmissionSystemDataParser.new(config["submission"])
+subsys.parse!
 
-# 和文論文誌の場合
-f_j = open("final_output_j.txt", "w")
+searchsys = PaperSearchSystemDataParser.new(config["search"])
+searchsys.parse!
 
-dst_volume_j["ja"].keys.sort.each do |key|
-  if src_volume_j[key].nil?
-    # 日本語でマッチしなかった場合
-    if dst_volume_j["ja"].has_multiple_values?(key)
-      # かつ，複数エントリある場合は単純に出力 NOT_MATCHED
-      dst_volume_j["ja"][key].sort {|a, b| a[:title] <=> b[:title]}.each do |pj|
-        if dst_records_j["en"].nil?
+subsys_volume_j = subsys.volume_j_hash
+subsys_volume_e = subsys.volume_e_hash
+searchsys_records = searchsys.records
+searchsys_volume = searchsys.volume_hash
+
+# 出力ファイル (temporary file)
+file = Tempfile.new(config["output"], "#{ROOT_PATH}/files")
+
+# 出力ロジック
+if searchsys_volume["ja"].nil?
+  # 英文論文誌の場合 (searchsys 側で "ja" 指定がない場合)
+  searchsys_volume["en"].keys.sort.each do |key|
+    if subsys_volume_e[key].nil?
+      # 英語でマッチしなかった場合
+      if searchsys_volume["en"].has_multiple_values?(key)
+        # かつ，複数エントリある場合はソートして出力 NOT_MATCHED
+        searchsys_volume["en"][key].sort {|a, b| a[:title] <=> b[:title]}.each do |pe|
+          # title でソートして提示
+          line_output(file, "en", pe, [], NOT_MATCHED, "sorry, no hints")
+          next
+        end
+      else
+        pe = searchsys_volume["en"][key]
+        # 単一エントリの場合は単純に出力 NOT_MATCHED
+        line_output(file, "en", pe, [], NOT_MATCHED, "sorry, no hints")
+        next
+      end
+    elsif searchsys_volume["en"].has_multiple_values?(key)
+      # 英語でマッチした場合で，
+      # 複数マッチした場合は，対応する投稿システムデータの候補を備考欄に提示
+      searchsys_volume["en"][key].sort {|a, b| a[:title] <=> b[:title]}.each_with_index do |pe, i|
+        sp = subsys_volume_e[key].sort {|a, b| a[:title_e] <=> b[:title_e]}
+        authorprofs_e = []
+        # 著者数が複数の場合は，所属も埋めておく
+        if pe[:authors].size > 1
+          authorprofs_e = sp[i][:authorprofs_e]
+        end
+        # 英語のみ
+        line_output(file, "en", pe, authorprofs_e, MULTI_VOL_AUTHOR_MATCH, note_format(sp[i]))
+        next
+      end
+    else
+      # 英語でマッチして，対象が単一エントリの場合は，タイトルもチェック
+      pe = searchsys_volume["en"][key]
+      if subsys_volume_e[key][:title_e] == pe[:title]
+        # タイトルも一致した場合
+        # 英語のみ
+        line_output(file, "en", pe, subsys_volume_e[key][:authorprofs_e], FULL_MATCH, note_format(subsys_volume_e[key]))
+        next
+      else
+        # タイトルは一致しなかった場合
+        # 英語のみ
+        line_output(file, "en", pe, subsys_volume_e[key][:authorprofs_e], VOL_AUTHOR_MATCH, note_format(subsys_volume_e[key]))
+        next
+      end
+    end
+  end
+else
+  # 和文論文誌の場合 ("ja" がある場合)
+  searchsys_volume["ja"].keys.sort.each do |key|
+    if subsys_volume_j[key].nil?
+      # 日本語でマッチしなかった場合
+      if searchsys_volume["ja"].has_multiple_values?(key)
+        # かつ，複数エントリある場合は単純に出力 NOT_MATCHED
+        searchsys_volume["ja"][key].sort {|a, b| a[:title] <=> b[:title]}.each do |pj|
+          # title でソートして提示
+          if searchsys_records["en"].nil?
+            # 日本語のみの場合
+            line_output(file, "ja", pj, [], NOT_MATCHED, "sorry, no hints")
+            next
+          else
+            # 英語ありの場合
+            pe = searchsys_records["en"][pj[:record].id]
+            # for debug
+            # puts "id = #{pj[:record].id}"
+            if pe.nil?
+              line_output(file, "ja", pj, [], NOT_MATCHED, "sorry, no hints")
+            else
+              line_outputs(file, "ja", pj, [], "en", pe, [], NOT_MATCHED, "sorry, no hints")
+            end
+            next
+          end
+        end
+      else
+        pj = searchsys_volume["ja"][key]
+        if searchsys_records["en"].nil?
+          # 英語データがない場合
+          line_output(file, "ja", pj, [], NOT_MATCHED, "sorry, no hints")
+          next
+        end
+        pe = searchsys_records["en"][pj[:record].id]
+        # for debug
+        # puts "id = #{pj[:record].id}"
+        if pe.nil?
+          # 英語エントリがない場合は
+          # 英語でもマッチなしとして，ヒントなしで出力 NOT_MATCHED
+          # 英語エントリがないので，日本語のみ
+          line_output(file, "ja", pj, [], NOT_MATCHED, "sorry, no hints")
+          next
+        end
+        k = DataParser.volume_author(pe[:volume_no], pe[:authors])
+        # 日本語でマッチせず，対象が単一エントリの場合は，英語でも確認
+        if subsys_volume_e[k].nil?
+          # 英語でもマッチしなかった場合ヒントなしで出力 NOT_MATCHED
+          line_outputs(file, "ja", pj, [], "en", pe, [], NOT_MATCHED, "sorry, no hints")
+        else
+          # 英語でマッチした場合タイトルもチェック
+          if subsys_volume_e[k][:title_e] == pe[:title]
+            # 英語タイトルもマッチした場合は EN_FULL_MATCH で日本語情報を併記して出力
+            line_outputs(file, "ja", pj, subsys_volume_e[k][:authorprofs_j], "en", pe, subsys_volume_e[k][:authorprofs_e], EN_FULL_MATCH, note_format(subsys_volume_e[k]))
+          else
+            # 英語タイトルはマッチしなかった場合は EN_VOL_AUTHOR_MATCH
+            line_outputs(file, "ja", pj, subsys_volume_j[k][:authorprofs_j], "en", pe, subsys_volume_e[k][:authorprofs_e], EN_VOL_AUTHOR_MATCH, note_format(subsys_volume_e[k]))
+          end
+        end
+      end
+    elsif searchsys_volume["ja"].has_multiple_values?(key)
+      # 日本語ではマッチしたが，
+      # 複数マッチした場合は，対応する投稿システムデータの候補を備考欄に提示
+      searchsys_volume["ja"][key].sort {|a, b| a[:title] <=> b[:title]}.each_with_index do |pj, i|
+        sp = subsys_volume_j[key].sort {|a, b| a[:title_j] <=> b[:title_j]}
+        authorprofs_j = []
+        authorprofs_e = []
+        # 著者数が複数の場合は，所属も埋めておくか？
+        if pj[:authors].size > 1
+          authorprofs_j = sp[i][:authorprofs_j]
+          authorprofs_e = sp[i][:authorprofs_e]
+        end
+        if searchsys_records["en"].nil?
           # 日本語のみの場合
-          line_output_j(f_j, pj, [], NOT_MATCHED, "sorry, no hints")
+          line_output(file, "ja", pj, authorprofs_j, MULTI_VOL_AUTHOR_MATCH, note_format(sp[i]))
           next
         else
           # 英語ありの場合
-          pe = dst_records_j["en"][pj[:record].id]
-          line_output_je(f_j, pj, [], pe, [], NOT_MATCHED, "sorry, no hints")
+          pe = searchsys_records["en"][pj[:record].id]
+          if pe.nil?
+            # 英語の対応するエントリがない場合は
+            line_output(file, "ja", pj, authorprofs_j, MULTI_VOL_AUTHOR_MATCH, note_format(sp[i]))
+          else
+            line_outputs(file, "ja", pj, authorprofs_j, "en", pe, authorprofs_e, MULTI_VOL_AUTHOR_MATCH, note_format(sp[i]))
+          end
           next
         end
       end
     else
-      pj = dst_volume_j["ja"][key]
-      if dst_records_j["en"].nil?
-        # 英語データがない場合
-        line_output_j(f_j, pj, [], NOT_MATCHED, "sorry, no hints")
-        next
-      end
-      pe = dst_records_j["en"][pj[:record].id]
-      k = volume_author(pe[:volume_no], pe[:authors])
-      # 日本語でマッチせず，対象が単一エントリの場合は，英語でも確認
-      if src_volume_e[k].nil?
-        # 英語でもマッチしなかった場合ヒントなしで出力 NOT_MATCHED
-        line_output_je(f_j, pj, [], pe, [], NOT_MATCHED, "sorry, no hints")
-      else
-        # 英語でマッチした場合タイトルもチェック
-        if src_volume_e[k][:title_e] == pe[:title]
-          # 英語タイトルもマッチした場合は EN_FULL_MATCH で日本語情報を併記して出力
-          line_output_je(f_j, pj, src_volume_e[k][:authorprofs_j], pe, src_volume_e[k][:authorprofs_e], EN_FULL_MATCH, note_format(src_volume_e[k]))
+      # 日本語でマッチして，対象が単一エントリの場合は，タイトルもチェック
+      pj = searchsys_volume["ja"][key]
+      if subsys_volume_j[key][:title_j] == pj[:title]
+        # タイトルも一致した場合
+        if searchsys_records["en"].nil?
+          # 日本語のみの場合
+          line_output(file, "ja", pj, subsys_volume_j[key][:authorprofs_j], FULL_MATCH, note_format(subsys_volume_j[key]))
+          next
         else
-          # 英語タイトルはマッチしなかった場合は EN_VOL_AUTHOR_MATCH
-          line_output_je(f_j, pj, src_volume_e[k][:authorprofs_j], pe, src_volume_e[k][:authorprofs_e], EN_VOL_AUTHOR_MATCH, note_format(src_volume_e[k]))
+          # 英語ありの場合
+          pe = searchsys_records["en"][pj[:record].id]
+          if pe.nil?
+            # 英語の対応するエントリなしの場合
+            line_output(file, "ja", pj, subsys_volume_j[key][:authorprofs_j], FULL_MATCH, note_format(subsys_volume_j[key]))
+          else
+            line_outputs(file, "ja", pj, subsys_volume_j[key][:authorprofs_j], "en", pe, subsys_volume_j[key][:authorprofs_e], FULL_MATCH, note_format(subsys_volume_j[key]))
+          end
+          next
         end
-      end
-    end
-  elsif dst_volume_j["ja"].has_multiple_values?(key)
-    # 日本語ではマッチしたが，
-    # 複数マッチした場合は，対応する投稿システムデータの候補を備考欄に提示
-    dst_volume_j["ja"][key].sort {|a, b| a[:title] <=> b[:title]}.each_with_index do |pj, i|
-      sp = src_volume_j[key].sort {|a, b| a[:title_j] <=> b[:title_j]}
-      authorprofs_j = []
-      authorprofs_e = []
-      # 著者数が複数の場合は，所属も埋めておくか？
-      if pj[:authors].size > 1
-        authorprofs_j = sp[i][:authorprofs_j]
-        authorprofs_e = sp[i][:authorprofs_e]
-      end
-      if dst_records_j["en"].nil?
-        # 日本語のみの場合
-        line_output_j(f_j, pj, authorprofs_j, MULTI_VOL_AUTHOR_MATCH, note_format(sp[i]))
-        next
       else
-        # 英語ありの場合
-        pe = dst_records_j["en"][pj[:record].id]
-        line_output_je(f_j, pj, authorprofs_j, pe, authorprofs_e, MULTI_VOL_AUTHOR_MATCH, note_format(sp[i]))
-        next
-      end
-    end
-  else
-    # 日本語でマッチして，対象が単一エントリの場合は，タイトルもチェック
-    pj = dst_volume_j["ja"][key]
-    if src_volume_j[key][:title_j] == pj[:title]
-      # タイトルも一致した場合
-      if dst_records_j["en"].nil?
-        # 日本語のみの場合
-        line_output_j(f_j, pj, src_volume_j[key][:authorprofs_j], FULL_MATCH, note_format(src_volume_j[key]))
-        next
-      else
-        # 英語ありの場合
-        pe = dst_records_j["en"][pj[:record].id]
-        line_output_je(f_j, pj, src_volume_j[key][:authorprofs_j], pe, src_volume_j[key][:authorprofs_e], FULL_MATCH, note_format(src_volume_j[key]))
-        next
-      end
-    else
-      # タイトルは一致しなかった場合
-      if dst_records_j["en"].nil?
-        # 日本語のみの場合
-        line_output_j(f_j, pj, src_volume_j[key][:authorprofs_j], VOL_AUTHOR_MATCH, note_format(src_volume_j[key]))
-        next
-      else
-        # 英語ありの場合
-        pe = dst_records_j["en"][pj[:record].id]
-        line_output_je(f_j, pj, src_volume_j[key][:authorprofs_j], pe, src_volume_j[key][:authorprofs_e], VOL_AUTHOR_MATCH, note_format(src_volume_j[key]))
-        next
+        # タイトルは一致しなかった場合
+        if searchsys_records["en"].nil?
+          # 日本語のみの場合
+          line_output(file, "ja", pj, subsys_volume_j[key][:authorprofs_j], VOL_AUTHOR_MATCH, note_format(subsys_volume_j[key]))
+          next
+        else
+          # 英語ありの場合
+          pe = searchsys_records["en"][pj[:record].id]
+          if pe.nil?
+            # 英語の対応するエントリなしの場合
+            line_output(file, "ja", pj, subsys_volume_j[key][:authorprofs_j], VOL_AUTHOR_MATCH, note_format(subsys_volume_j[key]))
+          else
+            line_outputs(file, "ja", pj, subsys_volume_j[key][:authorprofs_j], "en", pe, subsys_volume_j[key][:authorprofs_e], VOL_AUTHOR_MATCH, note_format(subsys_volume_j[key]))
+          end
+          next
+        end
       end
     end
   end
 end
 
-f_j.close
+file.close
 
+# for debug
+# system("cp #{file.path} #{ROOT_PATH}/files/#{config["output"]}")
+
+# sort lines by paper id
+system("sort -o #{ROOT_PATH}/files/#{config["output"]} -k 4,6 #{file.path}")
 
 =begin
 # the followings are statistics of source data
-subsys_parser = SubmissionSystemDataParser.new("toshiba-2010-utf8.txt")
-subsys_parser.parse!
-$stderr.puts "empty author_name_e count: #{subsys_parser.empty_authors_e_count}"
+subsys = SubmissionSystemDataParser.new("toukou-2010-utf8.txt")
+subsys.parse!
+$stderr.puts "empty author_name_e count: #{subsys.empty_authors_e_count}"
 
-searchsys_parser = PaperSearchSystemDataParser.new("output_j.txt")
-searchsys_parser.parse!
-$stderr.puts "Submission System: volume_j_hash.keys.size = #{subsys_parser.volume_j_hash.keys.size}"
-$stderr.puts "Submission System: volume_e_hash.keys.size = #{subsys_parser.volume_e_hash.keys.size}"
-$stderr.puts "Paper Search System: volume_hash.keys.size = #{searchsys_parser.volume_hash.keys.size}"
+searchsys = PaperSearchSystemDataParser.new("output_j.txt")
+searchsys.parse!
+$stderr.puts "Submission System: volume_j_hash.keys.size = #{subsys.volume_j_hash.keys.size}"
+$stderr.puts "Submission System: volume_e_hash.keys.size = #{subsys.volume_e_hash.keys.size}"
+$stderr.puts "Paper Search System: volume_hash.keys.size = #{searchsys.volume_hash.keys.size}"
 
 $stderr.puts "-----src-jp-----"
-$stderr.puts subsys_parser.volume_j_hash.keys.join("\n")
+$stderr.puts subsys.volume_j_hash.keys.join("\n")
 $stderr.puts "-----src-en-----"
-$stderr.puts subsys_parser.volume_e_hash.keys.join("\n")
+$stderr.puts subsys.volume_e_hash.keys.join("\n")
 $stderr.puts "-----dst-----"
-$stderr.puts searchsys_parser.volume_hash.keys.join("\n")
+$stderr.puts searchsys.volume_hash.keys.join("\n")
 $stderr.puts "-----"
 
 # check source title duplication
 $stderr.puts "----source title duplications-----"
 count = 0
-subsys_parser.title_j_hash.each do |key, value|
+subsys.title_j_hash.each do |key, value|
   if value.class == Array
     count += value.size
     $stderr.puts "#{key}: #{value}"
@@ -605,7 +817,7 @@ $stdout.puts "source title duplication: #{count}"
 # check destination title duplication
 $stderr.puts "----destination title duplications-----"
 count = 0
-searchsys_parser.title_hash.each do |key, value|
+searchsys.title_hash.each do |key, value|
   if value.class == Array
     count += value.size
     $stderr.puts "#{key}: #{value}"
@@ -617,7 +829,7 @@ $stdout.puts "destination title duplication: #{count}"
 $stderr.puts "----source volume_author duplications-----"
 count = 0
 uniq_count = 0
-subsys_parser.volume_j_hash.each do |key, value|
+subsys.volume_j_hash.each do |key, value|
   if value.class == Array
     count += value.size
     $stderr.puts "#{key}: #{value}"
@@ -632,7 +844,7 @@ $stdout.puts "source volume_author duplication unique count: #{uniq_count}"
 $stderr.puts "----destination volume_author duplications-----"
 count = 0
 uniq_count = 0
-searchsys_parser.volume_hash.each do |key, value|
+searchsys.volume_hash.each do |key, value|
   if value.class == Array
     count += value.size
     $stderr.puts "#{key}: #{value}"
@@ -643,11 +855,9 @@ end
 $stdout.puts "destination volume_author duplication: #{count}"
 $stdout.puts "destination volume_author duplication unique count: #{uniq_count}"
 
-exit 0
-
 # match with title (14)
 count = 0
-subsys_parser.title_j_hash.keys.each do |key|
+subsys.title_j_hash.keys.each do |key|
   if !dst_title_hash[key].nil?
     count += 1
   end
@@ -657,7 +867,7 @@ $stdout.puts "match with title: #{count}"
 # match with journal vol and number and authors
 count = 0
 unmatched = []
-subsys_parser.volume_j_hash.keys.each do |key|
+subsys.volume_j_hash.keys.each do |key|
   if !search_sys_parser.volume_hash[key].nil?
     count += 1
     if subsys_parser.volume_j_hash[key][:title_j] != searchsys_parser.volume_hash[key][:title]
