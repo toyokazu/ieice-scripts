@@ -22,24 +22,23 @@ http://www.cygwin.com/
 6. "Choose A Download Site" では，国内のサイトを適当に選択してください (例: http://ftp.jaist.ac.jp)．
 7. "Select Packages" では，必要なパッケージを指定します．RVM では，git, curl 等のコマンドラインツールを利用するので，以下の項目が有効になっているか（Skip ではなくバージョン番号が左端に表示されているか）確認してください．
 
-* Devel
-** gcc
-** gcc-core
-** git
-** git-completion
-** libtool
-** make
-** readline
-* Libs
-** zlib
-** zlib-devel
-* Net
-** openssl
-** openssh
-** curl
-* Utils
-** patch
-** (screen)
+- Devel
+-- gcc
+-- gcc-core
+-- git
+-- git-completion
+-- libtool
+-- make
+-- readline
+- Libs
+-- zlib
+-- zlib-devel
+- Net
+-- openssl
+-- openssh
+-- curl
+- Utils
+-- patch
 
 インストール完了後，Cygwin Terminal を実行します．
 
@@ -125,7 +124,11 @@ paper-search-system-data-japanese-utf8.tsv: 論文誌検索システムのデー
 paper-search-system-data-english-utf8.tsv: 論文誌検索システムのデータ（タブ区切り, UTF8）
 output-utf8.tsv（出力ファイル）
 
-入力ファイル，出力ファイルは files ディレクトリ以下で読み出し，書き込みされるため，ディレクトリを作成し，ここにファイルをコピーしてください．準備ができたら，以下のようにコマンドを実行します．
+入力ファイル，出力ファイルは files ディレクトリ以下で読み出し，書き込みされるため，ディレクトリを作成し，ここにファイルをコピーしてください．なお，ExcelファイルからTSVを作成した場合，文字コードがShiftJISになっています．その場合，例えば，以下の nkf.rb コマンドで ShiftJIS から Unicode UTF-8 に変換しておきます．
+
+    % ./script/nkf.rb -Sw input_file_sjis.txt > output_file_utf8.txt
+
+準備ができたら，以下のようにコマンドを実行します．
 
     % ./script/merge_affiliations.rb
 
