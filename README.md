@@ -1,15 +1,109 @@
 # IEICE Paper Meta Data Preprocessor
 
-本スクリプトでは，論文誌検索システムのデータと論文誌投稿システムのデータを照合し，著者データに所属，会員番号の情報を追加します．
+本スクリプトでは，論文誌検索システムのデータと論文誌投稿システムのデータを照合し，著者データに所属，会員番号の情報を追加します．また，論文誌検索システムのログから，論文の参照回数をカウントします．
 
 ## インストール方法
 
-本スクリプトは git コマンド，ruby (1.9.2以上) を利用します．以下のコマンドでスクリプトを手元の環境にコピーします．
+本スクリプトは git コマンド，ruby (1.9.2以上) を利用します．
+
+### Windows 環境での RVM のセットアップ
+
+以下，Windows での Ruby 実行環境のセットアップ手順です．
+
+cygwin の最新版をインストールします．RVM ではユーザのホームディレクトリに ruby 関連のコマンドをインストールするので，ユーザ名にスペースが含まれる場合，個別に対応が必要になります．できればスペースを含まないユーザ名のユーザを作成してください．
+
+http://www.cygwin.com/
+
+1. setup.exe をダウンロードして実行します．
+2. "Choose A Download Source" では，"Install from Internet" を選択します．
+3. "Select Root Install Directory" では，デフォルトの C:\cygwin のままとし，All Users に対してインストールします．
+4. "Select Local Package Directory" では，ダウンロードしたパッケージのキャッシュディレクトリを指定します．適当に空き容量のあるフォルダを指定してください．
+5. "Select Your Internet Connection" では，Proxy 等を利用していない場合は "Direct Connection" を選択してください．
+6. "Choose A Download Site" では，国内のサイトを適当に選択してください (例: http://ftp.jaist.ac.jp)．
+7. "Select Packages" では，必要なパッケージを指定します．RVM では，git, curl 等のコマンドラインツールを利用するので，以下の項目が有効になっているか（Skip ではなくバージョン番号が左端に表示されているか）確認してください．
+
+* Devel
+** gcc
+** gcc-core
+** git
+** git-completion
+** libtool
+** make
+** readline
+* Libs
+** zlib
+** zlib-devel
+* Net
+** openssl
+** openssh
+** curl
+* Utils
+** patch
+** (screen)
+
+インストール完了後，Cygwin Terminal を実行します．
+
+ホームディレクトリが作成されたら，以下のコマンドを実行して RVM をインストールします (https://rvm.io/rvm/install/ 参照)．
+
+    $ curl -L https://get.rvm.io | bash -s stable --ruby
+
+以下の設定を ~/.bashrc に追加します (~/.bash_profile に追加されているものを ~/.bashrc に追加)．
+
+    $ vi $HOME/.bashrc
+    [[ -s "$HOME/.rvm/scripts/rvm" ]] && source "$HOME/.rvm/scripts/rvm" # Load RVM into a shell session *as a function*
+
+あと，もし shell が /bin/bash になっていない場合は修正しておく(主にマルチユーザの場合)．
+
+    $ env | grep SHELL
+    /bin/sh -> /bin/bash なら OK
+    $ mkpasswd -l > /etc/passwd
+    $ vi /etc/passwd
+    ->該当ユーザ名の shell を /bin/bash に修正
+
+--ruby オプションを指定していれば ruby がインストールされるはずですが，以下のコマンドで no ruby と表示される場合は，手動でインストールしてください．
+
+    $ which ruby
+    which: no ruby in (....)
+
+    $ rvm install 1.9.3
+    $ rvm use 1.9.3
+
+これで ruby のインストールは完了です．
+
+### Linux (debian squeeze) での RVM のセットアップ
+
+以下，Linux (debian squeeze) の場合の Ruby 実行環境のセットアップ手順です．
+
+RVM が依存するパッケージをインストールします．
+
+    % sudo aptitude install build-essential openssl libreadline6 libreadline6-dev curl git-core zlib1g zlib1g-dev libssl-dev libyaml-dev libsqlite3-0 libsqlite3-dev sqlite3 libxml2-dev libxslt-dev autoconf libc6-dev ncurses-dev automake libtool bison subversion
+
+以下のコマンドを実行して RVM をインストールします (https://rvm.io/rvm/install/ 参照)．
+
+    $ curl -L https://get.rvm.io | bash -s stable --ruby
+
+--ruby オプションを指定していれば ruby がインストールされるはずですが，以下のコマンドで no ruby と表示される場合は，手動でインストールしてください．
+
+    $ which ruby
+    ruby not found
+
+    $ rvm install 1.9.3
+    $ rvm use 1.9.3
+
+これで ruby のインストールは完了です．
+
+### ieice-scripts のダウンロード
+
+以下のコマンドでスクリプトを手元の環境にコピーします．
 
     % git clone https://github.com/toyokazu/ieice-scripts.git
     % cd ieice-scripts
 
-## 使い方
+## merge_affiliations.rb
+
+著者の所属，会員番号を統合するためのスクリプトです．
+
+### 利用手順
 
 まず設定ファイルを作成します．
 
@@ -35,9 +129,9 @@ output-utf8.tsv（出力ファイル）
 
     % ./script/merge_affiliations.rb
 
-実行が完了すると，著者の所属や会員番号が統合されたデータが指定したファイル名で出力されます．出力フォーマットについては，次節で述べます．
+実行が完了すると，著者の所属や会員番号が統合されたデータが指定したファイル名で出力されます．入出力フォーマットについては，次節で述べます．
 
-## 出力フォーマット
+### 入出力フォーマット
 
 まず，入力ファイルのフォーマットについて述べます．
 
@@ -123,3 +217,50 @@ output-utf8.tsv（出力ファイル）
     NOT_MATCHED
 
 完全一致を除くと，間違って一致と判定されている場合があるため，備考欄には照合に用いられた論文誌投稿システムのデータも併記されます．
+
+## count_downloads.rb
+
+論文誌検索システムのアクセスログから論文のダウンロード数をカウントします．
+
+### 利用手順
+
+### 入出力フォーマット
+
+まず，入力ファイル (アクセスログ) のフォーマットです．
+
+    # 0: 項番  id  int8    
+    # 1: 閲覧日時  log_date  varchar 10  yyyymmdd hhmmss
+    # 2: ログインユーザ  user_id varchar 100 "環境変数　REMOTE_USER ID or メールアドレス"
+    # 3: 会員ソサイエティ  society varchar 5 
+    # 4: 閲覧ファイル名  f_name  varchar 100 
+    # 5: 分冊  category  varchar 100 
+    # 6: 大分類  type  varchar 100 
+    # 7: リモートホストアドレス  remote_addr varchar 200 環境変数　REMOTE_ADDR
+    # 8: リモートホスト名  remote_host varchar 200 環境変数　REMOTE_HOST
+    # 9:  ユーザエージェント  user_agent  varchar 100 環境変数　HTTP_USER_AGENT
+    # 10:  リクエストURI uri varchar 500 
+    # 11:  ブラウザ  browser varchar 50  
+    # 12:  クライアントOS  os  varchar 500 
+    # 13:  閲覧状態  err int   "ファイル閲覧時：1 ログイン成功時：2"
+    # 14:  ホスト名  host  varchar 200 ホスト名
+    # 15:  アクセス種別  access  varchar 1 "・通常ユーザ認証時 ： 0 ・サイトライセンス認証時 ： 1 ・サイトライセンス認証時＋ユーザ認証 ： 2"
+    # 16:  あらまし（Summary)閲覧  summary_view  varchar 1 あらまし閲覧時　：　1
+    # 17:  archive閲覧フラグ table_of_contents_view  varchar 1 archive閲覧時：1
+    # 18:  最新号閲覧フラグ  index_view  varchar 1 最新号閲覧時：1
+    # 19:  環境変数：X-Forwarded-For x_forwarded_for varchar 200 環境変数：X-Forwarded-For
+
+次に出力ファイルのフォーマットです．
+
+    # 0: 論文誌番号
+    # 1: 論文誌参照回数
+
+コメントアウトされた部分を使って，ログイン回数を集計することもできます．
+
+## License (MIT License)
+Copyright (C) 2012 by Toyokazu Akiyama.
+
+Permission is hereby granted, free of charge, to any person obtaining a copy of this software and associated documentation files (the "Software"), to deal in the Software without restriction, including without limitation the rights to use, copy, modify, merge, publish, distribute, sublicense, and/or sell copies of the Software, and to permit persons to whom the Software is furnished to do so, subject to the following conditions:
+
+The above copyright notice and this permission notice shall be included in all copies or substantial portions of the Software.
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.

@@ -65,7 +65,7 @@ end
 class SubmissionSystemDataParser < DataParser
   class Record
     def initialize(line)
-      @columns = line.gsub("\r\n", "").split("\t")
+      @columns = line.gsub(/\r*\n/, "").split("\t")
     end
 
     # 0: id1　　　　受付番号の西暦部分
@@ -259,7 +259,7 @@ class PaperSearchSystemDataParser < DataParser
     attr_reader :authors
 
     def initialize(line)
-      @columns = line.gsub("\r\n", "").split("\t")
+      @columns = line.gsub(/\r*\n$/, "").split("\t")
       @authors = @columns[7].gsub("　", " ").split("＠")
     end
 
