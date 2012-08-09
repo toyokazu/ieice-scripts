@@ -1,2 +1,2 @@
-log: log.txt
-output: downloads_count.txt
+log: log.tsv
+output: downloads_count.tsv

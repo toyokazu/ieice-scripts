@@ -22,23 +22,23 @@ http://www.cygwin.com/
 6. "Choose A Download Site" では，国内のサイトを適当に選択してください (例: http://ftp.jaist.ac.jp)．
 7. "Select Packages" では，必要なパッケージを指定します．RVM では，git, curl 等のコマンドラインツールを利用するので，以下の項目が有効になっているか（Skip ではなくバージョン番号が左端に表示されているか）確認してください．
 
-- Devel
--- gcc
--- gcc-core
--- git
--- git-completion
--- libtool
--- make
--- readline
-- Libs
--- zlib
--- zlib-devel
-- Net
--- openssl
--- openssh
--- curl
-- Utils
--- patch
+* Devel
+    * gcc
+    * gcc-core
+    * git
+    * git-completion
+    * libtool
+    * make
+    * readline
+* Libs
+    * zlib
+    * zlib-devel
+* Net
+    * openssl
+    * openssh
+    * curl
+* Utils
+    * patch
 
 インストール完了後，Cygwin Terminal を実行します．
 
@@ -226,6 +226,17 @@ output-utf8.tsv（出力ファイル）
 論文誌検索システムのアクセスログから論文のダウンロード数をカウントします．
 
 ### 利用手順
+
+まず設定ファイルを作成します．
+
+    % cp ./config/count_downloads_template.yml ./config/count_downloads.yml
+    % vi ./config/count_downloads.yml
+    log: log.tsv
+    output: output.tsv
+    
+設定ファイルには入力ファイル，出力ファイルのファイル名を指定します．入力ファイルの文字コードが UTF8 になっていない場合は，nkf.rb で変換します．準備ができたら以下のようにコマンドを実行します．
+
+    % ./script/count_downloads.rb
 
 ### 入出力フォーマット
 
